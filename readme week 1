@@ -1,0 +1,102 @@
+How many users do we have? 
+ - Query: 
+
+select count(user_id) from dbt_parker_r.users
+
+ - Answer: 130
+
+On average, how many orders do we receive per hour?
+ - Query:
+
+with orders_per_day_and_hour as 
+(
+select 
+date(created_at), 
+date_part('hour', created_at) as hour_of_day,
+date_part('day', created_at) as day,
+count(order_id) as order_count
+
+from dbt_parker_r.orders
+
+group by 1,2,3
+)
+select avg(order_count) from orders_per_day_and_hour
+
+ - Answer: 7.52
+
+On average, how long does an order take from being placed to being delivered?
+
+ - Query:
+
+with delivery_time as
+(
+select 
+EXTRACT(EPOCH FROM(delivered_at - created_at)) as delivery_time_in_seconds
+from 
+dbt_parker_r.orders
+where status = 'delivered'
+) ,
+
+average_delivery_time as
+(
+select 
+avg(delivery_time_in_seconds) as avg_delivery_time_in_seconds
+from 
+delivery_time
+)
+select
+TO_CHAR((avg_delivery_time_in_seconds || ' second')::interval, 'DD:HH24:MI:SS')
+FROM    average_delivery_time
+
+
+Answer: 00:93:24:11
+
+How many users have only made one purchase? Two purchases? Three+ purchases?
+ - Query: 
+
+with order_count_per_user as
+(
+select 
+user_id,
+count(distinct order_id) as order_count
+from 
+dbt_parker_r.orders
+group by 1
+), 
+user_buckets as 
+(
+select
+sum(case when order_count = 1 then 1 else 0 end) as "1",
+sum(case when order_count = 2 then 1 else 0 end) as "2",
+sum(case when order_count >2 then 1 else 0 end) as "3+"
+from
+order_count_per_user
+)
+
+select * from user_buckets
+
+ - Answer: 25, 28, 71
+
+
+
+On average, how many unique sessions do we have per hour?
+ - Query: 
+
+with unique_sessions_by_hour_and_day as 
+(
+select 
+date(created_at) as session_date,
+date_part('hour', created_at) as hour_of_day,
+date_part('day', created_at) as day,
+count(distinct session_id) as session_id_count
+
+from dbt_parker_r.events
+
+group by 1,2,3
+)
+select 
+avg(session_id_count) 
+from 
+unique_sessions_by_hour_and_day
+
+ - Answer: 16.33
